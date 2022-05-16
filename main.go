@@ -1,32 +1,31 @@
 package main
 
 import (
-	"StK8s/util"
-	"flag"
+	"StK8s/apiserver"
 	"fmt"
+	"log"
+	"net/http"
+	"time"
 )
 
-//注意：port、address、apiPrefix均为指针类型
 var (
-	port           = flag.Uint("port", 8080, "The port to listen on.  Default 8080.")
-	address        = flag.String("address", "127.0.0.1", "The address on the local server to listen to. Default 127.0.0.1")
-	apiPrefix      = flag.String("api_prefix", "/api/v1beta1", "The prefix for API requests on the server. Default '/api/v1beta1'")
-	etcdServerList util.StringList
+	address   = "127.0.0.1"
+	port      = 8899
+	apiPrefix = "/api/v1beta1"
 )
-
-func init() {
-	//Var方法使用指定的名字、使用信息注册一个flag。该flag的类型和值由第一个参数表示，该参数应实现了Value接口。
-	flag.Var(&etcdServerList, "etcd_servers", "Value type is string; Servers for the etcd (http://ip:port), comma separated")
-}
 
 func main() {
-	//从os.Args[1:]中解析注册的flag。 os.Args []string 保管了命令行参数，第一个是程序名。
-	flag.Parse()
+	var Rdata apiserver.RESTStorageData = "12"
+	storage := map[string]apiserver.RESTStorage{
+		"tasks": &Rdata,
+	}
 
-	fmt.Printf("port type is %T \n", port)
-
-	fmt.Println("port:", *port)
-	fmt.Println("address:", *address)
-	fmt.Println("apiPrefix:", *apiPrefix)
-	fmt.Println("etcdServerList:", etcdServerList)
+	s := &http.Server{
+		Addr:           fmt.Sprintf("%s:%d", address, port),
+		Handler:        apiserver.New(storage, apiPrefix),
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   10 * time.Second,
+		MaxHeaderBytes: 1 << 20,
+	}
+	log.Fatal(s.ListenAndServe())
 }
