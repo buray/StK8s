@@ -1,31 +1,54 @@
 package main
 
 import (
-	"StK8s/apiserver"
+	"context"
 	"fmt"
+	etcdCt "go.etcd.io/etcd/client/v3"
 	"log"
-	"net/http"
 	"time"
 )
 
-var (
-	address   = "127.0.0.1"
-	port      = 8899
-	apiPrefix = "/api/v1beta1"
-)
+var etcdServerList = []string{"http://192.168.123.161:2379", "http://192.168.123.160:2379", "http://192.168.123.162:2379"}
 
 func main() {
-	var Rdata apiserver.RESTStorageData = "12"
-	storage := map[string]apiserver.RESTStorage{
-		"tasks": &Rdata,
+	etcdClient, err := etcdCt.New(etcdCt.Config{
+		Endpoints:   etcdServerList,
+		DialTimeout: 5 * time.Second,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer etcdClient.Close()
+
+	for _, i := range etcdServerList {
+		clientStatus, err := etcdClient.Status(context.Background(), i)
+		if err != nil {
+			log.Fatal(err)
+		}
+		println(clientStatus.Version)
 	}
 
-	s := &http.Server{
-		Addr:           fmt.Sprintf("%s:%d", address, port),
-		Handler:        apiserver.New(storage, apiPrefix),
-		ReadTimeout:    10 * time.Second,
-		WriteTimeout:   10 * time.Second,
-		MaxHeaderBytes: 1 << 20,
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ttl, err := etcdClient.Grant(ctx, 20)
+	if err != nil {
+		log.Fatal(err)
 	}
-	log.Fatal(s.ListenAndServe())
+	leaseId := ttl.ID
+	fmt.Println("leaseId", leaseId)
+	_, err = etcdClient.Put(ctx, "sample_key2", "sample_value", etcdCt.WithLease(leaseId))
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	result, err := etcdClient.Get(ctx, "sample_key1")
+	if err != nil {
+		log.Fatal(err)
+	}
+	cancel()
+
+	println(string(result.Kvs[0].Value))
+	println(string(result.Kvs[0].Key))
+
+	fmt.Println("this is man function")
 }
